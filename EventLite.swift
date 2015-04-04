@@ -8,12 +8,18 @@
 
 import Foundation
 public class EventLite {
-    public init(){
+    let orderedEventNames:[String]
+    public init(orderedEventNames:[String]){
+        self.orderedEventNames = orderedEventNames
     }
     //public func assembleObjects<T:EventLiteObject,E:EventLiteEvent where E.T == T, T.T == T>(events:[[E]]) -> [T] {
     public func assembleObjects<T:EventLiteObject where T.T == T>(events:[BareEvent<T>]) -> [T] {
         let allEvents=events.sorted({(e1:BareEvent<T>,e2:BareEvent<T>)->Bool in
-            return e1.id <= e2.id && e1.time.compare(e2.time) != NSComparisonResult.OrderedDescending
+            let eventOrder1 = find(self.orderedEventNames,e1.eventName)
+            let eventOrder2 = find(self.orderedEventNames,e2.eventName)
+            return e1.id <= e2.id
+                && e1.time.compare(e2.time) != NSComparisonResult.OrderedDescending
+                && eventOrder1 <= eventOrder2
         })
         var allObjects:[T]=[]
         var obj:T?
@@ -21,7 +27,7 @@ public class EventLite {
         for e in allEvents {
             if id != e.id {
                 //add the finished object
-                if obj != nil {
+                if obj != nil { //avoid first run case
                     allObjects.append(obj!)
                 }
                 //create a new object
@@ -70,10 +76,12 @@ public class EventLite {
 public class BareEvent<T:EventLiteObject where T.T == T> {
     let id:Int
     let time:NSDate
+    let eventName:String
     let apply:(T)->T
-    public init(id:Int,time:NSDate,apply:(T)->T) {
+    public init(id:Int,time:NSDate,eventName:String,apply:(T)->T) {
         self.id=id
         self.time=time
+        self.eventName=eventName
         self.apply=apply
     }
 }
