@@ -17,68 +17,34 @@ public class EventLite {
         let allEvents=events.sorted({(e1:BareEvent<T>,e2:BareEvent<T>)->Bool in
             let eventOrder1 = find(self.orderedEventNames,e1.eventName)
             let eventOrder2 = find(self.orderedEventNames,e2.eventName)
-            return e1.id <= e2.id
-                && e1.time.compare(e2.time) != NSComparisonResult.OrderedDescending
+            return e1.time.compare(e2.time) != NSComparisonResult.OrderedDescending
+                && compareIds(e1.id,e2.id) != NSComparisonResult.OrderedDescending
                 && eventOrder1 <= eventOrder2
         })
-        var allObjects:[T]=[]
+        var allObjects:[Int:T]=[:]
         var obj:T?
-        var id = -1
-        for e in allEvents {
-            if id != e.id {
-                //add the finished object
-                if obj != nil { //avoid first run case
-                    allObjects.append(obj!)
+        for e in allEvents { //apply each event in chronological order
+            switch e.id {
+            case .All:
+                for id in allObjects.keys { //apply it to every object that exists up to this point
+                    allObjects[id]=e.apply(allObjects[id]!)
                 }
-                //create a new object
-                obj=T.create()
+            case .Single(let eid): //apply it to the specific object
+                if allObjects[eid] == nil {
+                    allObjects[eid]=T.create()
+                }
+                allObjects[eid]=e.apply(allObjects[eid]!)
             }
-            //keep applying events to the current object
-            obj=e.apply(obj!)
-            id=e.id
         }
-        if obj != nil {
-            //append the final object
-            allObjects.append(obj!)
-        }
-        return allObjects
-            
-            
-            
-        
-        /*smart merge union
-        var indexes:[(Int,Int)]=events.map({(l:[E])->(Int,Int) in return (0,l.count)})
-        while any(indexes,{(v:(Int,Int))->Bool in let (index,length) = v; return index+1 < length} {
-            var minValues:[E?]=[]
-            for i in 0...indexes.count {
-                let (index,length) = indexes[i]
-                if index+1 < length {
-                    minValues.append(events[i][indexes[i].0])
-                }
-                else {
-                    minValues.append(nil)
-                }
-            }
-            var ii=minIndex(minValues,{(e1:E,e2:E)->Bool in
-                return e1.id() <= e2.id() && e1.time().compare(e2.time()) != NSComparisonResult.OrderedDescending})
-            let event:E = events[ii][indexes[ii].0]
-            indexes[ii].0 += 1
-            let h = handlers.handlers[event.eventName()]!
-            var t=handlers.create()
-            return events.reduce(t, combine: {(t:T,e:E)->T in
-        
-            })
-
-        }
-        */
+        return allObjects.values.array
     }
 }
 public class BareEvent<T:EventLiteObject where T.T == T> {
-    let id:Int
+    let id:EventLiteId
     let time:NSDate
     let eventName:String
     let apply:(T)->T
-    public init(id:Int,time:NSDate,eventName:String,apply:(T)->T) {
+    public init(id:EventLiteId,time:NSDate,eventName:String,apply:(T)->T) {
         self.id=id
         self.time=time
         self.eventName=eventName
@@ -89,7 +55,7 @@ public protocol EventLiteEvent {
     //class func eventName() -> String
     typealias T:EventLiteObject
     func asBareEvent() -> BareEvent<T>
-    func getId() -> Int
+    func getId() -> EventLiteId
     func getTime() -> NSDate
 }
 public protocol EventLiteObject {
@@ -130,4 +96,34 @@ public func any<T>(l:[T],f:(t:T)->Bool) -> Bool {
         }
     }
     return false
+}
+public enum EventLiteId {
+    case All
+    case Single(Int)
+}
+public func compareIds(e1:EventLiteId,e2:EventLiteId) -> NSComparisonResult{
+    switch e1 {
+    case .All:
+        switch e2 {
+        case .All:
+            return NSComparisonResult.OrderedSame
+        default:
+            return NSComparisonResult.OrderedAscending
+        }
+    case .Single(let i1):
+        switch e2 {
+        case .All:
+            return NSComparisonResult.OrderedDescending
+        case .Single(let i2):
+            if i1 < i2 {
+                return NSComparisonResult.OrderedAscending
+            }
+            else if i1 > i2 {
+                return NSComparisonResult.OrderedDescending
+            }
+            else {
+                return NSComparisonResult.OrderedSame
+            }
+        }
+    }
 }
